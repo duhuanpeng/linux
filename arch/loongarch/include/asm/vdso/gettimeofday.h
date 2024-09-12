@@ -12,6 +12,7 @@
 #include <asm/unistd.h>
 #include <asm/vdso/vdso.h>
 
+#ifdef CONFIG_GENERIC_GETTIMEOFDAY
 #define VDSO_HAS_CLOCK_GETRES		1
 
 static __always_inline long gettimeofday_fallback(
@@ -89,6 +90,19 @@ static inline bool loongarch_vdso_hres_capable(void)
 }
 #define __arch_vdso_hres_capable loongarch_vdso_hres_capable
 
+static __always_inline const struct vdso_data *__arch_get_vdso_data(void)
+{
+	return (const struct vdso_data *)get_vdso_data();
+}
+
+#ifdef CONFIG_TIME_NS
+static __always_inline
+const struct vdso_data *__arch_get_timens_vdso_data(const struct vdso_data *vd)
+{
+	return (const struct vdso_data *)(get_vdso_data() + VVAR_TIMENS_PAGE_OFFSET * PAGE_SIZE);
+}
+#endif
+#endif /* CONFIG_GENERIC_GETTIMEOFDAY */
 #endif /* !__ASSEMBLER__ */
 
 #endif /* __ASM_VDSO_GETTIMEOFDAY_H */

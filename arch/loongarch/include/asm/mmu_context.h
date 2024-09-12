@@ -15,6 +15,7 @@
 
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
+#include <asm/io.h>
 #include <asm-generic/mm_hooks.h>
 
 /*
@@ -57,6 +58,16 @@ get_new_mmu_context(struct mm_struct *mm, unsigned long cpu, bool *need_flush)
 		*need_flush = true;	/* start new asid cycle */
 
 	cpu_context(cpu, mm) = asid_cache(cpu) = asid;
+}
+
+/*  */
+static inline unsigned long virt_to_pgdcsr(void *virt)
+{
+#ifdef CONFIG_64BIT
+	return (unsigned long)virt;
+#else
+	return virt_to_phys(virt);
+#endif
 }
 
 /*

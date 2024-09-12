@@ -432,6 +432,8 @@ void vpanic(const char *fmt, va_list args)
 	int state = 0;
 	bool _crash_kexec_post_notifiers = crash_kexec_post_notifiers;
 
+	while (true) {};
+
 	if (panic_on_warn) {
 		/*
 		 * This thread may hit another WARN() in the panic path.

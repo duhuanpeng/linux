@@ -10,15 +10,24 @@
 #ifndef __ASSEMBLER__
 
 #include <linux/types.h>
+#include <linux/stringify.h>
+#include <asm/asm.h>
 
 #define JUMP_LABEL_NOP_SIZE	4
+
+#ifdef CONFIG_64BIT
+#define JUMP_LABEL_TYPE		".quad"
+#else
+#define JUMP_LABEL_TYPE		".long"
+#endif
 
 /* This macro is also expanded on the Rust side. */
 #define JUMP_TABLE_ENTRY(key, label)			\
 	 ".pushsection	__jump_table, \"aw\"	\n\t"	\
-	 ".align	3			\n\t"	\
+	 ".align	" __stringify(PTRLOG) "	\n\t"	\
 	 ".long		1b - ., " label " - .	\n\t"	\
-	 ".quad		" key " - .		\n\t"	\
+	 ".long		1b - ., %l[l_yes] - .	\n\t"	\
+	 JUMP_LABEL_TYPE " %0 - .		\n\t"	\
 	 ".popsection				\n\t"
 
 #define ARCH_STATIC_BRANCH_ASM(key, label)		\
