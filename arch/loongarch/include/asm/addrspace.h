@@ -125,7 +125,11 @@ extern unsigned long vm_map_base;
 /*
  * Returns the physical address of a KPRANGEx / XKPRANGE address
  */
+#ifdef CONFIG_PHYS_ADDR_T_64BIT
 #define PHYSADDR(a)		((_ACAST64_(a)) & TO_PHYS_MASK)
+#else
+#define PHYSADDR(a)		((_ACAST32_(a)) & TO_PHYS_MASK)
+#endif
 
 /*
  * On LoongArch, I/O ports mappring is following:
