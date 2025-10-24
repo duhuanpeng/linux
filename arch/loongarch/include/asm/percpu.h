@@ -141,26 +141,6 @@ static __always_inline void __percpu_write(void __percpu *ptr, unsigned long val
 }
 #endif
 
-static __always_inline unsigned long __percpu_xchg(void *ptr, unsigned long val, int size)
-{
-	switch (size) {
-	case 1:
-	case 2:
-		return __xchg_small((volatile void *)ptr, val, size);
-
-	case 4:
-		return __xchg_asm("amswap.w", (volatile u32 *)ptr, (u32)val);
-
-	case 8:
-		return __xchg_asm("amswap.d", (volatile u64 *)ptr, (u64)val);
-
-	default:
-		BUILD_BUG();
-	}
-
-	return 0;
-}
-
 #define __pcpu_op_1(op)		op ".b "
 #define __pcpu_op_2(op)		op ".h "
 #define __pcpu_op_4(op)		op ".w "
