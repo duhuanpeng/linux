@@ -932,7 +932,7 @@
 #define CSR_DMW3_INIT		0x0
 #else
 #define CSR_DMW0_PLV0		(1 << 0)
-#define CSR_DMW0_VSEG		(0x8)
+#define CSR_DMW0_VSEG		(0x4)
 #define CSR_DMW0_BASE		(CSR_DMW0_VSEG << DMW_PABITS)
 #define CSR_DMW0_INIT		(CSR_DMW0_BASE | CSR_DMW0_PLV0)
 
@@ -940,7 +940,7 @@
 
 #define CSR_DMW1_PLV0		(1 << 0)
 #define CSR_DMW1_MAT		(1 << 4)
-#define CSR_DMW1_VSEG		(0xa)
+#define CSR_DMW1_VSEG		(0x5)
 #define CSR_DMW1_BASE		(CSR_DMW1_VSEG << DMW_PABITS)
 #define CSR_DMW1_INIT		(CSR_DMW1_BASE | CSR_DMW1_MAT | CSR_DMW1_PLV0)
 
