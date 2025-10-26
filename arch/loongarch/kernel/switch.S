@@ -16,6 +16,7 @@
  */
 	.align	5
 SYM_FUNC_START(__switch_to)
+#if 0
 	csrrd		t1, LOONGARCH_CSR_PRMD
 	LONG_STPTR	t1, a0, THREAD_CSRPRMD
 
@@ -37,6 +38,6 @@ SYM_FUNC_START(__switch_to)
 
 	LONG_LDPTR	t1, a1, THREAD_CSRPRMD
 	csrwr		t1, LOONGARCH_CSR_PRMD
-
+#endif
 	jr	ra
 SYM_FUNC_END(__switch_to)
