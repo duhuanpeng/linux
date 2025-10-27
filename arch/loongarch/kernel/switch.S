@@ -14,30 +14,41 @@
  * task_struct *__switch_to(task_struct *prev, task_struct *next,
  *			    struct thread_info *next_ti, void *sched_ra, void *sched_cfa)
  */
+
 	.align	5
 SYM_FUNC_START(__switch_to)
-#if 0
+#ifdef CONFIG_32BIT
+	PTR_ADDI	a0, a0, TASK_STRUCT_OFFSET
+#endif
 	csrrd		t1, LOONGARCH_CSR_PRMD
-	LONG_STPTR	t1, a0, THREAD_CSRPRMD
+	LONG_STPTR	t1, a0, (THREAD_CSRPRMD - TASK_STRUCT_OFFSET)
 
 	cpu_save_nonscratch a0
-	LONG_STPTR	ra, a0, THREAD_REG01
-	LONG_STPTR	a3, a0, THREAD_SCHED_RA
-	LONG_STPTR	a4, a0, THREAD_SCHED_CFA
+	LONG_STPTR	ra, a0, (THREAD_REG01 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	a3, a0, (THREAD_SCHED_RA - TASK_STRUCT_OFFSET)
+	LONG_STPTR	a4, a0, (THREAD_SCHED_CFA - TASK_STRUCT_OFFSET)
+
 #if defined(CONFIG_STACKPROTECTOR) && !defined(CONFIG_SMP)
-	la	t7, __stack_chk_guard
-	LONG_L	t8, a1, TASK_STACK_CANARY
-	LONG_S	t8, t7, 0
+	la		t7, __stack_chk_guard
+	LONG_L		t8, a1, TASK_STACK_CANARY
+	LONG_S		t8, t7, 0
 #endif
-	move	tp, a2
+
+#ifdef CONFIG_32BIT
+	PTR_ADDI	a1, a1, TASK_STRUCT_OFFSET
+#endif
+	move		tp, a2
 	cpu_restore_nonscratch a1
 
 	li.w		t0, _THREAD_SIZE
 	PTR_ADD		t0, t0, tp
 	set_saved_sp	t0, t1, t2
 
-	LONG_LDPTR	t1, a1, THREAD_CSRPRMD
+	LONG_LDPTR	t1, a1, (THREAD_CSRPRMD - TASK_STRUCT_OFFSET)
 	csrwr		t1, LOONGARCH_CSR_PRMD
+
+#ifdef CONFIG_32BIT
+	PTR_ADDI	a0, a0, -TASK_STRUCT_OFFSET
 #endif
-	jr	ra
+	jr		ra
 SYM_FUNC_END(__switch_to)

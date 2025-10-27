@@ -9,34 +9,40 @@
 #include <asm/regdef.h>
 #include <asm/fpregdef.h>
 #include <asm/loongarch.h>
+#include <linux/sizes.h>
 
-	.macro	cpu_save_nonscratch thread
-	LONG_STPTR	s0, \thread, THREAD_REG23
-	LONG_STPTR	s1, \thread, THREAD_REG24
-	LONG_STPTR	s2, \thread, THREAD_REG25
-	LONG_STPTR	s3, \thread, THREAD_REG26
-	LONG_STPTR	s4, \thread, THREAD_REG27
-	LONG_STPTR	s5, \thread, THREAD_REG28
-	LONG_STPTR	s6, \thread, THREAD_REG29
-	LONG_STPTR	s7, \thread, THREAD_REG30
-	LONG_STPTR	s8, \thread, THREAD_REG31
-	LONG_STPTR	sp, \thread, THREAD_REG03
-	LONG_STPTR	fp, \thread, THREAD_REG22
+#ifdef CONFIG_64BIT
+#define TASK_STRUCT_OFFSET 0
+#else
+#define TASK_STRUCT_OFFSET SZ_1K
+#endif
+
+	.macro cpu_save_nonscratch thread
+	LONG_STPTR	s0, \thread, (THREAD_REG23 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	s1, \thread, (THREAD_REG24 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	s2, \thread, (THREAD_REG25 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	s3, \thread, (THREAD_REG26 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	s4, \thread, (THREAD_REG27 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	s5, \thread, (THREAD_REG28 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	s6, \thread, (THREAD_REG29 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	s7, \thread, (THREAD_REG30 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	s8, \thread, (THREAD_REG31 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	sp, \thread, (THREAD_REG03 - TASK_STRUCT_OFFSET)
+	LONG_STPTR	fp, \thread, (THREAD_REG22 - TASK_STRUCT_OFFSET)
 	.endm
 
-	.macro	cpu_restore_nonscratch thread
-	LONG_LDPTR	s0, \thread, THREAD_REG23
-	LONG_LDPTR	s1, \thread, THREAD_REG24
-	LONG_LDPTR	s2, \thread, THREAD_REG25
-	LONG_LDPTR	s3, \thread, THREAD_REG26
-	LONG_LDPTR	s4, \thread, THREAD_REG27
-	LONG_LDPTR	s5, \thread, THREAD_REG28
-	LONG_LDPTR	s6, \thread, THREAD_REG29
-	LONG_LDPTR	s7, \thread, THREAD_REG30
-	LONG_LDPTR	s8, \thread, THREAD_REG31
-	LONG_LDPTR	ra, \thread, THREAD_REG01
-	LONG_LDPTR	sp, \thread, THREAD_REG03
-	LONG_LDPTR	fp, \thread, THREAD_REG22
+	.macro cpu_restore_nonscratch thread
+	LONG_LDPTR	s0, \thread, (THREAD_REG23 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	s1, \thread, (THREAD_REG24 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	s2, \thread, (THREAD_REG25 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	s3, \thread, (THREAD_REG26 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	s4, \thread, (THREAD_REG27 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	s5, \thread, (THREAD_REG28 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	s6, \thread, (THREAD_REG29 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	s7, \thread, (THREAD_REG30 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	s8, \thread, (THREAD_REG31 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	sp, \thread, (THREAD_REG03 - TASK_STRUCT_OFFSET)
+	LONG_LDPTR	fp, \thread, (THREAD_REG22 - TASK_STRUCT_OFFSET)
 	.endm
 
 	.macro fpu_save_csr thread tmp
