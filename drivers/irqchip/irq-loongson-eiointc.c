@@ -37,9 +37,9 @@
 #define  EXTIOI_ENABLE_INT_ENCODE      BIT(2)
 #define  EXTIOI_ENABLE_CPU_ENCODE      BIT(3)
 
-#define VEC_REG_COUNT		4
-#define VEC_COUNT_PER_REG	64
-#define VEC_COUNT		(VEC_REG_COUNT * VEC_COUNT_PER_REG)
+#define VEC_COUNT		256
+#define VEC_COUNT_PER_REG	BITS_PER_LONG
+#define VEC_REG_COUNT		(VEC_COUNT / BITS_PER_LONG)
 #define VEC_REG_IDX(irq_id)	((irq_id) / VEC_COUNT_PER_REG)
 #define VEC_REG_BIT(irq_id)     ((irq_id) % VEC_COUNT_PER_REG)
 #define EIOINTC_ALL_ENABLE	0xffffffff
@@ -323,7 +323,7 @@ static void eiointc_irq_dispatch(struct irq_desc *desc)
 	 * read ISR for these 64 interrupt vectors rather than all vectors
 	 */
 	for (i = info->start; i < info->end; i++) {
-		pending = iocsr_read64(EIOINTC_REG_ISR + (i << 3));
+		pending = read_isr(i);
 
 		/* Skip handling if pending bitmap is zero */
 		if (!pending)
