@@ -6796,6 +6796,9 @@ static void __sched notrace __schedule(int sched_mode)
 	struct rq *rq;
 	int cpu;
 
+printk("sssssssssssssssssssssssssssssss\n");
+printk("ra: 0x%lx\n", (unsigned long)__builtin_return_address(0));
+
 	/* Trace preemptions consistently with task switches */
 	trace_sched_entry_tp(sched_mode == SM_PREEMPT);
 
@@ -6842,7 +6845,7 @@ static void __sched notrace __schedule(int sched_mode)
 
 	/* Task state changes only considers SM_PREEMPT as preemption */
 	preempt = sched_mode == SM_PREEMPT;
-
+//#1 while(1);
 	/*
 	 * We must load prev->state once (task_struct::state is volatile), such
 	 * that we form a control dependency vs deactivate_task() below.
@@ -6924,9 +6927,10 @@ keep_resched:
 					     prev->se.sched_delayed);
 
 		trace_sched_switch(preempt, prev, next, prev_state);
-
+//#2 OK: while(1);
 		/* Also unlocks the rq: */
 		rq = context_switch(rq, prev, next, &rf);
+//#3 OK: while(1);
 	} else {
 		/* In case next was already curr but just got blocked_donor */
 		if (!task_current_donor(rq, next))
@@ -6937,6 +6941,10 @@ keep_resched:
 		raw_spin_rq_unlock_irq(rq);
 	}
 	trace_sched_exit_tp(is_switch);
+
+//#4 OK: while(1);
+printk("SSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSSS\n");
+printk("ra: 0x%lx\n", (unsigned long)__builtin_return_address(0));
 }
 
 void __noreturn do_task_dead(void)
@@ -6947,6 +6955,7 @@ void __noreturn do_task_dead(void)
 	/* Tell freezer to ignore us: */
 	current->flags |= PF_NOFREEZE;
 
+	printk("vim %s +%d\n", __FILE__, __LINE__);
 	__schedule(SM_NONE);
 	BUG();
 
@@ -7008,8 +7017,12 @@ static __always_inline void __schedule_loop(int sched_mode)
 {
 	do {
 		preempt_disable();
+printk("sched_mode: %d\n", sched_mode);
+printk("vim %s +%d\n", __FILE__, __LINE__);
 		__schedule(sched_mode);
+printk("vim %s +%d\n", __FILE__, __LINE__);
 		sched_preempt_enable_no_resched();
+printk("vim %s +%d\n", __FILE__, __LINE__);
 	} while (need_resched());
 }
 
@@ -7023,6 +7036,7 @@ asmlinkage __visible void __sched schedule(void)
 
 	if (!task_is_running(tsk))
 		sched_submit_work(tsk);
+printk("ssssssssssssssssssssss --> vim %s +%d\n", __FILE__, __LINE__);
 	__schedule_loop(SM_NONE);
 	sched_update_worker(tsk);
 }
@@ -7049,6 +7063,7 @@ void __sched schedule_idle(void)
 	 */
 	WARN_ON_ONCE(current->__state);
 	do {
+printk("vim %s +%d\n", __FILE__, __LINE__);
 		__schedule(SM_IDLE);
 	} while (need_resched());
 }
@@ -7087,6 +7102,7 @@ void __sched schedule_preempt_disabled(void)
 #ifdef CONFIG_PREEMPT_RT
 void __sched notrace schedule_rtlock(void)
 {
+	printk("vim %s +%d\n", __FILE__, __LINE__);
 	__schedule_loop(SM_RTLOCK_WAIT);
 }
 NOKPROBE_SYMBOL(schedule_rtlock);
@@ -7110,6 +7126,7 @@ static void __sched notrace preempt_schedule_common(void)
 		 */
 		preempt_disable_notrace();
 		preempt_latency_start(1);
+printk("vim %s +%d\n", __FILE__, __LINE__);
 		__schedule(SM_PREEMPT);
 		preempt_latency_stop(1);
 		preempt_enable_no_resched_notrace();
@@ -7134,6 +7151,8 @@ asmlinkage __visible void __sched notrace preempt_schedule(void)
 	 */
 	if (likely(!preemptible()))
 		return;
+
+printk("vim -t %s\n", __func__);
 	preempt_schedule_common();
 }
 NOKPROBE_SYMBOL(preempt_schedule);
@@ -7203,11 +7222,17 @@ asmlinkage __visible void __sched notrace preempt_schedule_notrace(void)
 		 * an infinite recursion.
 		 */
 		prev_ctx = exception_enter();
+printk("vim %s +%d\n", __FILE__, __LINE__);
+printk("vim -t %s\n", __func__);
 		__schedule(SM_PREEMPT);
+printk("vim %s +%d\n", __FILE__, __LINE__);
 		exception_exit(prev_ctx);
+printk("vim %s +%d\n", __FILE__, __LINE__);
 
 		preempt_latency_stop(1);
+printk("vim %s +%d\n", __FILE__, __LINE__);
 		preempt_enable_no_resched_notrace();
+printk("EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE\n");
 	} while (need_resched());
 }
 EXPORT_SYMBOL_GPL(preempt_schedule_notrace);
@@ -7253,6 +7278,7 @@ asmlinkage __visible void __sched preempt_schedule_irq(void)
 	do {
 		preempt_disable();
 		local_irq_enable();
+printk("vim %s +%d\n", __FILE__, __LINE__);
 		__schedule(SM_PREEMPT);
 		local_irq_disable();
 		sched_preempt_enable_no_resched();
@@ -7304,7 +7330,9 @@ void rt_mutex_pre_schedule(void)
 void rt_mutex_schedule(void)
 {
 	lockdep_assert(current->sched_rt_mutex);
+	printk("vim %s +%d\n", __FILE__, __LINE__);
 	__schedule_loop(SM_NONE);
+
 }
 
 void rt_mutex_post_schedule(void)

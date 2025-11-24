@@ -60,7 +60,6 @@ int __ref page_is_ram(unsigned long pfn)
 	return memblock_is_memory(addr) && !memblock_is_reserved(addr);
 }
 
-#ifndef CONFIG_NUMA
 void __init paging_init(void)
 {
 	unsigned long max_zone_pfns[MAX_NR_ZONES];
@@ -70,13 +69,8 @@ void __init paging_init(void)
 #endif
 	max_zone_pfns[ZONE_NORMAL] = max_low_pfn;
 
-#ifdef CONFIG_HIGHMEM
-	max_zone_pfn[ZONE_HIGHMEM] = max_pfn;
-#endif
-
 	free_area_init(max_zone_pfns);
 }
-#endif /* !CONFIG_NUMA */
 
 void __ref free_initmem(void)
 {
@@ -196,7 +190,6 @@ void __init __set_fixmap(enum fixed_addresses idx,
 	BUG_ON(idx <= FIX_HOLE || idx >= __end_of_fixed_addresses);
 
 	ptep = populate_kernel_pte(addr);
-
 	if (!pte_none(ptep_get(ptep))) {
 		pte_ERROR(*ptep);
 		return;
@@ -231,24 +224,22 @@ EXPORT_SYMBOL(invalid_pmd_table);
 pte_t invalid_pte_table[PTRS_PER_PTE] __page_aligned_bss;
 EXPORT_SYMBOL(invalid_pte_table);
 
-#ifdef CONFIG_EXECMEM
+#if defined(CONFIG_EXECMEM) && defined(MODULES_VADDR)
 static struct execmem_info execmem_info __ro_after_init;
 
 struct execmem_info __init *execmem_arch_setup(void)
 {
 	execmem_info = (struct execmem_info){
 		.ranges = {
-#ifdef MODULES_VADDR
 			[EXECMEM_DEFAULT] = {
 				.start	= MODULES_VADDR,
 				.end	= MODULES_END,
 				.pgprot	= PAGE_KERNEL,
 				.alignment = 1,
 			},
-#endif
 		},
 	};
 
 	return &execmem_info;
 }
-#endif /* CONFIG_EXECMEM */
+#endif /* CONFIG_EXECMEM && MODULES_VADDR */
