@@ -16,12 +16,12 @@
 #define PTRS_PER_PMD_BITS	(PAGE_SHIFT - PTRLOG)
 #define PTRS_PER_PTE_BITS	(PAGE_SHIFT - PTRLOG)
 
-#ifdef CONFIG_64BIT
-#define PTE_LL	PTE_LL
-#define PTE_SC	PTE_SC
-#else
+#ifdef CONFIG_32BIT
 #define PTE_LL	ll.w
 #define PTE_SC	sc.w
+#else
+#define PTE_LL	ll.d
+#define PTE_SC	sc.d
 #endif
 
 	.macro tlb_do_page_fault, write
@@ -68,47 +68,38 @@ SYM_CODE_START(handle_tlb_load)
 
 vmalloc_done_load:
 	/* Get PGD offset in bytes */
+#ifdef CONFIG_32BIT
+	PTR_BSTRPICK	ra, t0, 31, PGDIR_SHIFT
+#else
 	PTR_BSTRPICK	ra, t0, PTRS_PER_PGD_BITS + PGDIR_SHIFT - 1, PGDIR_SHIFT
-	PTR_ALSL		t1, ra, t1, _PGD_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
+#endif
+	PTR_ALSL	t1, ra, t1, _PGD_T_LOG2
 
 #if CONFIG_PGTABLE_LEVELS > 3
-	PTR_L			t1, t1, 0
+	PTR_L		t1, t1, 0
 	PTR_BSTRPICK	ra, t0, PTRS_PER_PUD_BITS + PUD_SHIFT - 1, PUD_SHIFT
-	PTR_ALSL		t1, ra, t1, _PMD_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
+	PTR_ALSL	t1, ra, t1, _PMD_T_LOG2
 
 #endif
 #if CONFIG_PGTABLE_LEVELS > 2
-	PTR_L			t1, t1, 0
+	PTR_L		t1, t1, 0
 	PTR_BSTRPICK	ra, t0, PTRS_PER_PMD_BITS + PMD_SHIFT - 1, PMD_SHIFT
-	PTR_ALSL		t1, ra, t1, _PMD_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
+	PTR_ALSL	t1, ra, t1, _PMD_T_LOG2
 
 #endif
-	PTR_L			ra, t1, 0
+	PTR_L		ra, t1, 0
 
 	/*
 	 * For huge tlb entries, pmde doesn't contain an address but
 	 * instead contains the tlb pte. Check the PAGE_HUGE bit and
 	 * see if we need to jump to huge tlb processing.
 	 */
-	PTR_ROTRI		ra, ra, _PAGE_HUGE_SHIFT + 1
-	bltz			ra, tlb_huge_update_load
+	PTR_ROTRI	ra, ra, _PAGE_HUGE_SHIFT + 1
+	bltz		ra, tlb_huge_update_load
 
-	PTR_ROTRI		ra, ra, BITS_PER_LONG - (_PAGE_HUGE_SHIFT + 1)
+	PTR_ROTRI	ra, ra, BITS_PER_LONG - (_PAGE_HUGE_SHIFT + 1)
 	PTR_BSTRPICK	t0, t0, PTRS_PER_PTE_BITS + PAGE_SHIFT - 1, PAGE_SHIFT
-	PTR_ALSL		t1, t0, ra, _PTE_T_LOG2
-	
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
-
+	PTR_ALSL	t1, t0, ra, _PTE_T_LOG2
 
 #ifdef CONFIG_SMP
 smp_pgtable_change_load:
@@ -148,9 +139,9 @@ vmalloc_load:
 	/* This is the entry point of a huge page. */
 tlb_huge_update_load:
 #ifdef CONFIG_SMP
-	PTE_LL			ra, t1, 0
+	PTE_LL		ra, t1, 0
 #else
-	PTR_ROTRI		ra, ra, BITS_PER_LONG - (_PAGE_HUGE_SHIFT + 1)
+	PTR_ROTRI	ra, ra, BITS_PER_LONG - (_PAGE_HUGE_SHIFT + 1)
 #endif
 	andi		t0, ra, _PAGE_PRESENT
 	beqz		t0, nopage_tlb_load
@@ -181,9 +172,9 @@ tlb_huge_update_load:
 	/* Huge page: Move Global bit */
 	xori		t0, t0, _PAGE_HUGE
 	lu12i.w		t1, _PAGE_HGLOBAL >> 12
-	and			t1, t0, t1
-	PTR_SRL		t1, t1, (_PAGE_HGLOBAL_SHIFT - _PAGE_GLOBAL_SHIFT)
-	or			t0, t0, t1
+	and		t1, t0, t1
+	PTR_SRL 	t1, t1, (_PAGE_HGLOBAL_SHIFT - _PAGE_GLOBAL_SHIFT)
+	or		t0, t0, t1
 
 	move		ra, t0
 	csrwr		ra, LOONGARCH_CSR_TLBELO0
@@ -195,16 +186,12 @@ tlb_huge_update_load:
 	csrwr		t0, LOONGARCH_CSR_TLBELO1
 
 	/* Set huge page tlb entry size */
-	# addu16i.d	t0, zero, (CSR_TLBIDX_PS >> 16)
-	# addu16i.d	t1, zero, (PS_HUGE_SIZE << (CSR_TLBIDX_PS_SHIFT - 16))
 	PTR_LI		t0, (CSR_TLBIDX_PS >> 16) << 16
 	PTR_LI		t1, (PS_HUGE_SIZE << (CSR_TLBIDX_PS_SHIFT))
 	csrxchg		t1, t0, LOONGARCH_CSR_TLBIDX
 
 	tlbfill
 
-	# addu16i.d	t0, zero, (CSR_TLBIDX_PS >> 16)
-	# addu16i.d	t1, zero, (PS_DEFAULT_SIZE << (CSR_TLBIDX_PS_SHIFT - 16))
 	PTR_LI		t0, (CSR_TLBIDX_PS >> 16) << 16
 	PTR_LI		t1, (PS_DEFAULT_SIZE << (CSR_TLBIDX_PS_SHIFT))
 	csrxchg		t1, t0, LOONGARCH_CSR_TLBIDX
@@ -218,18 +205,16 @@ nopage_tlb_load:
 	dbar		0x700
 	csrrd		ra, EXCEPTION_KS2
 	la_abs		t0, tlb_do_page_fault_0
-	jr			t0
+	jr		t0
 SYM_CODE_END(handle_tlb_load)
-
 
 SYM_CODE_START(handle_tlb_load_ptw)
 	UNWIND_HINT_UNDEFINED
 	csrwr		t0, LOONGARCH_CSR_KS0
 	csrwr		t1, LOONGARCH_CSR_KS1
 	la_abs		t0, tlb_do_page_fault_0
-	jr			t0
+	jr		t0
 SYM_CODE_END(handle_tlb_load_ptw)
-
 
 SYM_CODE_START(handle_tlb_store)
 	UNWIND_HINT_UNDEFINED
@@ -246,47 +231,36 @@ SYM_CODE_START(handle_tlb_store)
 
 vmalloc_done_store:
 	/* Get PGD offset in bytes */
+#ifdef CONFIG_32BIT
+	PTR_BSTRPICK	ra, t0, 31, PGDIR_SHIFT
+#else
 	PTR_BSTRPICK	ra, t0, PTRS_PER_PGD_BITS + PGDIR_SHIFT - 1, PGDIR_SHIFT
-	PTR_ALSL		t1, ra, t1, _PGD_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
+#endif
+	PTR_ALSL	t1, ra, t1, _PGD_T_LOG2
 
 #if CONFIG_PGTABLE_LEVELS > 3
-	PTR_L			t1, t1, 0
+	PTR_L		t1, t1, 0
 	PTR_BSTRPICK	ra, t0, PTRS_PER_PUD_BITS + PUD_SHIFT - 1, PUD_SHIFT
-	PTR_ALSL		t1, ra, t1, _PMD_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
-
+	PTR_ALSL	t1, ra, t1, _PMD_T_LOG2
 #endif
 #if CONFIG_PGTABLE_LEVELS > 2
-	PTR_L			t1, t1, 0
+	PTR_L		t1, t1, 0
 	PTR_BSTRPICK	ra, t0, PTRS_PER_PMD_BITS + PMD_SHIFT - 1, PMD_SHIFT
-	PTR_ALSL		t1, ra, t1, _PMD_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
-
+	PTR_ALSL	t1, ra, t1, _PMD_T_LOG2
 #endif
-	
-	PTR_L			ra, t1, 0
+	PTR_L		ra, t1, 0
 
 	/*
 	 * For huge tlb entries, pmde doesn't contain an address but
 	 * instead contains the tlb pte. Check the PAGE_HUGE bit and
 	 * see if we need to jump to huge tlb processing.
 	 */
-	PTR_ROTRI		ra, ra, _PAGE_HUGE_SHIFT + 1
-	bltz			ra, tlb_huge_update_store
+	PTR_ROTRI	ra, ra, _PAGE_HUGE_SHIFT + 1
+	bltz		ra, tlb_huge_update_store
 
-	PTR_ROTRI		ra, ra, BITS_PER_LONG - (_PAGE_HUGE_SHIFT + 1)
+	PTR_ROTRI	ra, ra, BITS_PER_LONG - (_PAGE_HUGE_SHIFT + 1)
 	PTR_BSTRPICK	t0, t0, PTRS_PER_PTE_BITS + PAGE_SHIFT - 1, PAGE_SHIFT
-	PTR_ALSL		t1, t0, ra, _PTE_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
+	PTR_ALSL	t1, t0, ra, _PTE_T_LOG2
 
 #ifdef CONFIG_SMP
 smp_pgtable_change_store:
@@ -299,17 +273,17 @@ smp_pgtable_change_store:
 	andi		ra, t0, _PAGE_PRESENT | _PAGE_WRITE
 	xori		ra, ra, _PAGE_PRESENT | _PAGE_WRITE
 #else
-	PTR_LI      ra, _PAGE_PRESENT | _PAGE_WRITE
-	and         ra, ra, t0
-	nor         ra, ra, zero
+	PTR_LI		ra, _PAGE_PRESENT | _PAGE_WRITE
+	and		ra, ra, t0
+	nor		ra, ra, zero
 #endif
 	bnez		ra, nopage_tlb_store
-	
+
 #ifdef CONFIG_64BIT
-	ori			t0, t0, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	ori		t0, t0, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
 #else
-	PTR_LI      ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
-	or          t0, ra, t0
+	PTR_LI		ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	or		t0, ra, t0
 #endif
 
 #ifdef CONFIG_SMP
@@ -347,29 +321,26 @@ tlb_huge_update_store:
 	andi		t0, ra, _PAGE_PRESENT | _PAGE_WRITE
 	xori		t0, t0, _PAGE_PRESENT | _PAGE_WRITE
 #else
-	PTR_LI      t0, _PAGE_PRESENT | _PAGE_WRITE
-	and         t0, t0, ra
-	nor         t0, t0, zero
-#endif	
+	PTR_LI		t0, _PAGE_PRESENT | _PAGE_WRITE
+	and		t0, t0, ra
+	nor		t0, t0, zero
+#endif
 
 	bnez		t0, nopage_tlb_store
 
 #ifdef CONFIG_SMP
-	ori			t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	ori		t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
 	PTE_SC		t0, t1, 0
 	beqz		t0, tlb_huge_update_store
-	ori			t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	ori		t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
 #else
-
 #ifdef CONFIG_64BIT
-	ori			t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	ori		t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
 #else
-	PTR_LI      t0, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
-	or          t0, ra, t0
+	PTR_LI		t0, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	or		t0, ra, t0
 #endif
-
 	PTR_S		t0, t1, 0
-
 #endif
 	csrrd		ra, LOONGARCH_CSR_ASID
 	csrrd		t1, LOONGARCH_CSR_BADV
@@ -389,7 +360,7 @@ tlb_huge_update_store:
 	xori		t0, t0, _PAGE_HUGE
 	lu12i.w		t1, _PAGE_HGLOBAL >> 12
 	and		t1, t0, t1
-	PTR_SRL		t1, t1, (_PAGE_HGLOBAL_SHIFT - _PAGE_GLOBAL_SHIFT)
+	PTR_SRL 	t1, t1, (_PAGE_HGLOBAL_SHIFT - _PAGE_GLOBAL_SHIFT)
 	or		t0, t0, t1
 
 	move		ra, t0
@@ -402,8 +373,6 @@ tlb_huge_update_store:
 	csrwr		t0, LOONGARCH_CSR_TLBELO1
 
 	/* Set huge page tlb entry size */
-	# addu16i.d	t0, zero, (CSR_TLBIDX_PS >> 16)
-	# addu16i.d	t1, zero, (PS_HUGE_SIZE << (CSR_TLBIDX_PS_SHIFT - 16))
 	PTR_LI		t0, (CSR_TLBIDX_PS >> 16) << 16
 	PTR_LI		t1, (PS_HUGE_SIZE << (CSR_TLBIDX_PS_SHIFT))
 	csrxchg		t1, t0, LOONGARCH_CSR_TLBIDX
@@ -411,8 +380,6 @@ tlb_huge_update_store:
 	tlbfill
 
 	/* Reset default page size */
-	# addu16i.d	t0, zero, (CSR_TLBIDX_PS >> 16)
-	# addu16i.d	t1, zero, (PS_DEFAULT_SIZE << (CSR_TLBIDX_PS_SHIFT - 16))
 	PTR_LI		t0, (CSR_TLBIDX_PS >> 16) << 16
 	PTR_LI		t1, (PS_DEFAULT_SIZE << (CSR_TLBIDX_PS_SHIFT))
 	csrxchg		t1, t0, LOONGARCH_CSR_TLBIDX
@@ -429,8 +396,6 @@ nopage_tlb_store:
 	jr		t0
 SYM_CODE_END(handle_tlb_store)
 
-
-
 SYM_CODE_START(handle_tlb_store_ptw)
 	UNWIND_HINT_UNDEFINED
 	csrwr		t0, LOONGARCH_CSR_KS0
@@ -438,7 +403,6 @@ SYM_CODE_START(handle_tlb_store_ptw)
 	la_abs		t0, tlb_do_page_fault_1
 	jr		t0
 SYM_CODE_END(handle_tlb_store_ptw)
-
 
 SYM_CODE_START(handle_tlb_modify)
 	UNWIND_HINT_UNDEFINED
@@ -455,47 +419,36 @@ SYM_CODE_START(handle_tlb_modify)
 
 vmalloc_done_modify:
 	/* Get PGD offset in bytes */
+#ifdef CONFIG_32BIT
+	PTR_BSTRPICK	ra, t0, 31, PGDIR_SHIFT
+#else
 	PTR_BSTRPICK	ra, t0, PTRS_PER_PGD_BITS + PGDIR_SHIFT - 1, PGDIR_SHIFT
-	PTR_ALSL		t1, ra, t1, _PGD_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
+#endif
+	PTR_ALSL	t1, ra, t1, _PGD_T_LOG2
 
 #if CONFIG_PGTABLE_LEVELS > 3
-	PTR_L			t1, t1, 0
+	PTR_L		t1, t1, 0
 	PTR_BSTRPICK	ra, t0, PTRS_PER_PUD_BITS + PUD_SHIFT - 1, PUD_SHIFT
-	PTR_ALSL		t1, ra, t1, _PMD_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
-
+	PTR_ALSL	t1, ra, t1, _PMD_T_LOG2
 #endif
 #if CONFIG_PGTABLE_LEVELS > 2
-	PTR_L			t1, t1, 0
+	PTR_L		t1, t1, 0
 	PTR_BSTRPICK	ra, t0, PTRS_PER_PMD_BITS + PMD_SHIFT - 1, PMD_SHIFT
-	PTR_ALSL		t1, ra, t1, _PMD_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
-
+	PTR_ALSL	t1, ra, t1, _PMD_T_LOG2
 #endif
-	PTR_L			ra, t1, 0
+	PTR_L		ra, t1, 0
 
 	/*
 	 * For huge tlb entries, pmde doesn't contain an address but
 	 * instead contains the tlb pte. Check the PAGE_HUGE bit and
 	 * see if we need to jump to huge tlb processing.
 	 */
-	PTR_ROTRI		ra, ra, _PAGE_HUGE_SHIFT + 1
-	bltz			ra, tlb_huge_update_modify
+	PTR_ROTRI	ra, ra, _PAGE_HUGE_SHIFT + 1
+	bltz		ra, tlb_huge_update_modify
 
-	PTR_ROTRI		ra, ra, BITS_PER_LONG - (_PAGE_HUGE_SHIFT + 1)
+	PTR_ROTRI	ra, ra, BITS_PER_LONG - (_PAGE_HUGE_SHIFT + 1)
 	PTR_BSTRPICK	t0, t0, PTRS_PER_PTE_BITS + PAGE_SHIFT - 1, PAGE_SHIFT
-	PTR_ALSL		t1, t0, ra, _PTE_T_LOG2
-
-	PTR_LI			ra, CSR_DMW1_VSEG
-	PTR_BSTRINS  	t1, ra, (BITS_PER_LONG - 1), DMW_PABITS
-
+	PTR_ALSL	t1, t0, ra, _PTE_T_LOG2
 
 #ifdef CONFIG_SMP
 smp_pgtable_change_modify:
@@ -506,7 +459,7 @@ smp_pgtable_change_modify:
 #ifdef CONFIG_64BIT
 	andi		ra, t0, _PAGE_WRITE
 #else
-	PTR_LI      ra, _PAGE_WRITE
+	PTR_LI		ra, _PAGE_WRITE
 	and 		ra, t0, ra
 #endif
 
@@ -515,8 +468,8 @@ smp_pgtable_change_modify:
 #ifdef CONFIG_64BIT
 	ori		t0, t0, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
 #else
-	PTR_LI      ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
-	or          t0, ra, t0
+	PTR_LI		ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	or		t0, ra, t0
 #endif
 
 #ifdef CONFIG_SMP
@@ -553,23 +506,23 @@ tlb_huge_update_modify:
 #ifdef CONFIG_64BIT
 	andi		t0, ra, _PAGE_WRITE
 #else
-	PTR_LI      t0, _PAGE_WRITE
+	PTR_LI		t0, _PAGE_WRITE
 	and 		t0, ra, t0
 #endif
 
 	beqz		t0, nopage_tlb_modify
 
 #ifdef CONFIG_SMP
-	ori			t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	ori		t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
 	PTE_SC		t0, t1, 0
 	beqz		t0, tlb_huge_update_modify
-	ori			t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	ori		t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
 #else
 #ifdef CONFIG_64BIT
-	ori			t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	ori		t0, ra, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
 #else
-	PTR_LI      t0, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
-	or          t0, ra, t0
+	PTR_LI		t0, (_PAGE_VALID | _PAGE_DIRTY | _PAGE_MODIFIED)
+	or		t0, ra, t0
 #endif
 	PTR_S		t0, t1, 0
 #endif
@@ -591,7 +544,7 @@ tlb_huge_update_modify:
 	xori		t0, t0, _PAGE_HUGE
 	lu12i.w		t1, _PAGE_HGLOBAL >> 12
 	and		t1, t0, t1
-	PTR_SRL		t1, t1, (_PAGE_HGLOBAL_SHIFT - _PAGE_GLOBAL_SHIFT)
+	PTR_SRL 	t1, t1, (_PAGE_HGLOBAL_SHIFT - _PAGE_GLOBAL_SHIFT)
 	or		t0, t0, t1
 
 	move		ra, t0
@@ -604,8 +557,6 @@ tlb_huge_update_modify:
 	csrwr		t0, LOONGARCH_CSR_TLBELO1
 
 	/* Set huge page tlb entry size */
-	# addu16i.d	t0, zero, (CSR_TLBIDX_PS >> 16)
-	# addu16i.d	t1, zero, (PS_HUGE_SIZE << (CSR_TLBIDX_PS_SHIFT - 16))
 	PTR_LI		t0, (CSR_TLBIDX_PS >> 16) << 16
 	PTR_LI		t1, (PS_HUGE_SIZE << (CSR_TLBIDX_PS_SHIFT))
 	csrxchg		t1, t0, LOONGARCH_CSR_TLBIDX
@@ -613,8 +564,6 @@ tlb_huge_update_modify:
 	tlbfill
 
 	/* Reset default page size */
-	# addu16i.d	t0, zero, (CSR_TLBIDX_PS >> 16)
-	# addu16i.d	t1, zero, (PS_DEFAULT_SIZE << (CSR_TLBIDX_PS_SHIFT - 16))
 	PTR_LI		t0, (CSR_TLBIDX_PS >> 16) << 16
 	PTR_LI		t1, (PS_DEFAULT_SIZE << (CSR_TLBIDX_PS_SHIFT))
 	csrxchg		t1, t0, LOONGARCH_CSR_TLBIDX
@@ -631,7 +580,6 @@ nopage_tlb_modify:
 	jr		t0
 SYM_CODE_END(handle_tlb_modify)
 
-
 SYM_CODE_START(handle_tlb_modify_ptw)
 	UNWIND_HINT_UNDEFINED
 	csrwr		t0, LOONGARCH_CSR_KS0
@@ -639,6 +587,43 @@ SYM_CODE_START(handle_tlb_modify_ptw)
 	la_abs		t0, tlb_do_page_fault_1
 	jr		t0
 SYM_CODE_END(handle_tlb_modify_ptw)
+
+#ifdef CONFIG_32BIT
+SYM_CODE_START(handle_tlb_refill)
+	UNWIND_HINT_UNDEFINED
+	csrwr		t0, EXCEPTION_KS0
+	csrwr		t1, EXCEPTION_KS1
+	csrwr		ra, EXCEPTION_KS2
+	li.w		ra, 0x1fffffff
+
+	csrrd		t0, LOONGARCH_CSR_PGD
+	csrrd		t1, LOONGARCH_CSR_TLBRBADV
+	srli.w		t1, t1, PGDIR_SHIFT
+	slli.w		t1, t1, 0x2
+	add.w		t0, t0, t1
+	and		t0, t0, ra
+
+	ld.w		t0, t0, 0
+	csrrd		t1, LOONGARCH_CSR_TLBRBADV
+	slli.w		t1, t1, (32 - PGDIR_SHIFT)
+	srli.w		t1, t1, (32 - PGDIR_SHIFT + PAGE_SHIFT + 1)
+	slli.w		t1, t1, (0x2 + 1)
+	add.w		t0, t0, t1
+	and		t0, t0, ra
+
+	ld.w		t1, t0, 0x0
+	csrwr		t1, LOONGARCH_CSR_TLBRELO0
+
+	ld.w		t1, t0, 0x4
+	csrwr		t1, LOONGARCH_CSR_TLBRELO1
+
+	tlbfill
+	csrrd		t0, EXCEPTION_KS0
+	csrrd		t1, EXCEPTION_KS1
+	csrrd		ra, EXCEPTION_KS2
+	ertn
+SYM_CODE_END(handle_tlb_refill)
+#endif
 
 #ifdef CONFIG_64BIT
 SYM_CODE_START(handle_tlb_refill)
@@ -656,43 +641,6 @@ SYM_CODE_START(handle_tlb_refill)
 	ldpte		t0, 1
 	tlbfill
 	csrrd		t0, LOONGARCH_CSR_TLBRSAVE
-	ertn
-SYM_CODE_END(handle_tlb_refill)
-
-#else // LoongArch32
-SYM_CODE_START(handle_tlb_refill)
-	UNWIND_HINT_UNDEFINED
-	csrwr	t0, EXCEPTION_KS0
-	csrwr   t1, EXCEPTION_KS1
-	csrwr   ra, EXCEPTION_KS2
-
-	csrrd	t0, LOONGARCH_CSR_PGD
-	csrrd   t1, LOONGARCH_CSR_TLBRBADV
-	srli.w	t1, t1, 0x16
-	slli.w	t1, t1, 0x2
-	add.w	t0, t0, t1
-	li.w	ra, 0xfffffff
-	and	t0, t0, ra
-	ld.w	t0, t0, 0
-
-	csrrd	t1, LOONGARCH_CSR_TLBRBADV
-	srli.w	t1, t1, 0xa
-	andi	t1, t1, 0xff8
-	add.w	t0, t0, t1
-	and	t0, t0, ra
-
-	ld.w	t1, t0, 0
-    and     t1, t1, ra
-	csrwr	t1, LOONGARCH_CSR_TLBRELO0
-
-	ld.w	t1, t0, 0x4
-    and     t1, t1, ra
-	csrwr	t1, LOONGARCH_CSR_TLBRELO1
-
-	tlbfill
-	csrrd	t0, EXCEPTION_KS0
-	csrrd   t1, EXCEPTION_KS1
-	csrrd   ra, EXCEPTION_KS2
 	ertn
 SYM_CODE_END(handle_tlb_refill)
 #endif

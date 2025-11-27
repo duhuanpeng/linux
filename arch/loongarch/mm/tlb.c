@@ -231,8 +231,8 @@ static void setup_ptwalker(void)
 
 	csr_write(pwctl0, LOONGARCH_CSR_PWCTL0);
 	csr_write(pwctl1, LOONGARCH_CSR_PWCTL1);
-	csr_write(virt_to_pgdcsr(swapper_pg_dir), LOONGARCH_CSR_PGDH);
-	csr_write(virt_to_pgdcsr(invalid_pg_dir), LOONGARCH_CSR_PGDL);
+	csr_write((long)swapper_pg_dir, LOONGARCH_CSR_PGDH);
+	csr_write((long)invalid_pg_dir, LOONGARCH_CSR_PGDL);
 	csr_write((long)smp_processor_id(), LOONGARCH_CSR_TMID);
 }
 
