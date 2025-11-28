@@ -14,7 +14,7 @@
 #ifdef CONFIG_64BIT
 #define TASK_STRUCT_OFFSET 0
 #else
-#define TASK_STRUCT_OFFSET SZ_1K
+#define TASK_STRUCT_OFFSET THREAD_REG01
 #endif
 
 	.macro cpu_save_nonscratch thread
